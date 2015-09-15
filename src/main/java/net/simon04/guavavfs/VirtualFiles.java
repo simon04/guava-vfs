@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007 The Guava Authors
+ * Copyright (C) 2015 Simon Legner
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.io.FileWriteMode.APPEND;
 
-import com.google.common.annotations.Beta;
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
@@ -38,7 +37,15 @@ import com.google.common.io.CharSink;
 import com.google.common.io.CharSource;
 import com.google.common.io.Closer;
 import com.google.common.io.FileWriteMode;
+import com.google.common.io.Files;
 import com.google.common.io.LineProcessor;
+import org.apache.commons.vfs2.FileContent;
+import org.apache.commons.vfs2.FileObject;
+import org.apache.commons.vfs2.FileSystemException;
+import org.apache.commons.vfs2.FileSystemManager;
+import org.apache.commons.vfs2.FileSystemOptions;
+import org.apache.commons.vfs2.VFS;
+import org.apache.commons.vfs2.provider.sftp.SftpFileSystemConfigBuilder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -57,59 +64,62 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Provides utility methods for working with files.
- *
+ * <p>
  * <p>All method parameters must be non-null unless documented otherwise.
  *
- * @author Chris Nokleberg
- * @author Colin Decker
- * @since 1.0
+ * @author Simon Legner
  */
-@Beta
 public final class VirtualFiles {
 
-  /** Maximum loop count when creating temp directories. */
-  private static final int TEMP_DIR_ATTEMPTS = 10000;
+  private VirtualFiles() {
+  }
 
-  private VirtualFiles() {}
+  static final FileSystemOptions FILE_SYSTEM_OPTIONS = new FileSystemOptions();
+  static {
+    SftpFileSystemConfigBuilder.getInstance().setUserDirIsRoot(FILE_SYSTEM_OPTIONS, false);
+  }
+
+  static FileObject resolveFile(String file) throws FileSystemException {
+    return VFS.getManager().resolveFile(file, FILE_SYSTEM_OPTIONS);
+  }
 
   /**
    * Returns a buffered reader that reads from a file using the given
    * character set.
    *
-   * @param file the file to read from
+   * @param file    the file to read from
    * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @return the buffered reader
    */
-  public static BufferedReader newReader(File file, Charset charset)
-      throws FileNotFoundException {
+  public static BufferedReader newReader(String file, Charset charset)
+          throws FileNotFoundException {
     checkNotNull(file);
     checkNotNull(charset);
     return new BufferedReader(
-        new InputStreamReader(new FileInputStream(file), charset));
+            new InputStreamReader(new FileInputStream(file), charset));
   }
 
   /**
    * Returns a buffered writer that writes to a file using the given
    * character set.
    *
-   * @param file the file to write to
+   * @param file    the file to write to
    * @param charset the charset used to encode the output stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @return the buffered writer
    */
-  public static BufferedWriter newWriter(File file, Charset charset)
-      throws FileNotFoundException {
+  public static BufferedWriter newWriter(String file, Charset charset)
+          throws FileNotFoundException {
     checkNotNull(file);
     checkNotNull(charset);
     return new BufferedWriter(
-        new OutputStreamWriter(new FileOutputStream(file), charset));
+            new OutputStreamWriter(new FileOutputStream(file), charset));
   }
 
   /**
@@ -117,47 +127,27 @@ public final class VirtualFiles {
    *
    * @since 14.0
    */
-  public static ByteSource asByteSource(File file) {
-    return new FileByteSource(file);
+  public static ByteSource asByteSource(String file) {
+    return new VirtualFileByteSource(file);
   }
 
-  private static final class FileByteSource extends ByteSource {
+  private static final class VirtualFileByteSource extends ByteSource {
 
-    private final File file;
+    private final String filename;
 
-    private FileByteSource(File file) {
-      this.file = checkNotNull(file);
+    private VirtualFileByteSource(String filename) {
+      this.filename = checkNotNull(filename);
     }
 
     @Override
-    public FileInputStream openStream() throws IOException {
-      return new FileInputStream(file);
-    }
-
-    @Override
-    public long size() throws IOException {
-      if (!file.isFile()) {
-        throw new FileNotFoundException(file.toString());
-      }
-      return file.length();
-    }
-
-    @Override
-    public byte[] read() throws IOException {
-      Closer closer = Closer.create();
-      try {
-        FileInputStream in = closer.register(openStream());
-        return readFile(in, in.getChannel().size());
-      } catch (Throwable e) {
-        throw closer.rethrow(e);
-      } finally {
-        closer.close();
-      }
+    public InputStream openStream() throws IOException {
+      final FileContent content = resolveFile(filename).getContent();
+      return content.getInputStream();
     }
 
     @Override
     public String toString() {
-      return "Files.asByteSource(" + file + ")";
+      return "VirtualFiles.asByteSource(" + filename + ")";
     }
   }
 
@@ -168,10 +158,10 @@ public final class VirtualFiles {
    * from the stream.
    */
   static byte[] readFile(
-      InputStream in, long expectedSize) throws IOException {
+          InputStream in, long expectedSize) throws IOException {
     if (expectedSize > Integer.MAX_VALUE) {
       throw new OutOfMemoryError("file is too large to fit in a byte array: "
-          + expectedSize + " bytes");
+              + expectedSize + " bytes");
     }
 
     return ByteStreams.toByteArray(in);
@@ -186,28 +176,24 @@ public final class VirtualFiles {
    *
    * @since 14.0
    */
-  public static ByteSink asByteSink(File file, FileWriteMode... modes) {
-    return new FileByteSink(file, modes);
+  public static ByteSink asByteSink(String file, FileWriteMode... modes) {
+    return new VirtualFileByteSink(file, modes);
   }
 
-  private static final class FileByteSink extends ByteSink {
+  private static final class VirtualFileByteSink extends ByteSink {
 
-    private final File file;
+    private final String filename;
     private final ImmutableSet<FileWriteMode> modes;
 
-    private FileByteSink(File file, FileWriteMode... modes) {
-      this.file = checkNotNull(file);
+    private VirtualFileByteSink(String filename, FileWriteMode... modes) {
+      this.filename = checkNotNull(filename);
       this.modes = ImmutableSet.copyOf(modes);
     }
 
     @Override
-    public FileOutputStream openStream() throws IOException {
-      return new FileOutputStream(file, modes.contains(APPEND));
-    }
-
-    @Override
-    public String toString() {
-      return "Files.asByteSink(" + file + ", " + modes + ")";
+    public OutputStream openStream() throws IOException {
+      final FileContent content = resolveFile(filename).getContent();
+      return content.getOutputStream(modes.contains(APPEND));
     }
   }
 
@@ -217,7 +203,7 @@ public final class VirtualFiles {
    *
    * @since 14.0
    */
-  public static CharSource asCharSource(File file, Charset charset) {
+  public static CharSource asCharSource(String file, Charset charset) {
     return asByteSource(file).asCharSource(charset);
   }
 
@@ -231,15 +217,15 @@ public final class VirtualFiles {
    *
    * @since 14.0
    */
-  public static CharSink asCharSink(File file, Charset charset,
-      FileWriteMode... modes) {
+  public static CharSink asCharSink(String file, Charset charset,
+                                    FileWriteMode... modes) {
     return asByteSink(file, modes).asCharSink(charset);
   }
 
   private static FileWriteMode[] modes(boolean append) {
     return append
-        ? new FileWriteMode[]{ FileWriteMode.APPEND }
-        : new FileWriteMode[0];
+            ? new FileWriteMode[]{FileWriteMode.APPEND}
+            : new FileWriteMode[0];
   }
 
   /**
@@ -248,10 +234,10 @@ public final class VirtualFiles {
    * @param file the file to read from
    * @return a byte array containing all the bytes from file
    * @throws IllegalArgumentException if the file is bigger than the largest
-   *     possible byte array (2^31 - 1)
-   * @throws IOException if an I/O error occurs
+   *                                  possible byte array (2^31 - 1)
+   * @throws IOException              if an I/O error occurs
    */
-  public static byte[] toByteArray(File file) throws IOException {
+  public static byte[] toByteArray(String file) throws IOException {
     return asByteSource(file).read();
   }
 
@@ -259,13 +245,13 @@ public final class VirtualFiles {
    * Reads all characters from a file into a {@link String}, using the given
    * character set.
    *
-   * @param file the file to read from
+   * @param file    the file to read from
    * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @return a string containing all the characters from the file
    * @throws IOException if an I/O error occurs
    */
-  public static String toString(File file, Charset charset) throws IOException {
+  public static String toString(String file, Charset charset) throws IOException {
     return asCharSource(file, charset).read();
   }
 
@@ -273,10 +259,10 @@ public final class VirtualFiles {
    * Overwrites a file with the contents of a byte array.
    *
    * @param from the bytes to write
-   * @param to the destination file
+   * @param to   the destination file
    * @throws IOException if an I/O error occurs
    */
-  public static void write(byte[] from, File to) throws IOException {
+  public static void write(byte[] from, String to) throws IOException {
     asByteSink(to).write(from);
   }
 
@@ -284,29 +270,29 @@ public final class VirtualFiles {
    * Copies all bytes from a file to an output stream.
    *
    * @param from the source file
-   * @param to the output stream
+   * @param to   the output stream
    * @throws IOException if an I/O error occurs
    */
-  public static void copy(File from, OutputStream to) throws IOException {
+  public static void copy(String from, OutputStream to) throws IOException {
     asByteSource(from).copyTo(to);
   }
 
   /**
    * Copies all the bytes from one file to another.
-   *
+   * <p>
    * <p><b>Warning:</b> If {@code to} represents an existing file, that file
    * will be overwritten with the contents of {@code from}. If {@code to} and
    * {@code from} refer to the <i>same</i> file, the contents of that file
    * will be deleted.
    *
    * @param from the source file
-   * @param to the destination file
-   * @throws IOException if an I/O error occurs
+   * @param to   the destination file
+   * @throws IOException              if an I/O error occurs
    * @throws IllegalArgumentException if {@code from.equals(to)}
    */
-  public static void copy(File from, File to) throws IOException {
+  public static void copy(String from, String to) throws IOException {
     checkArgument(!from.equals(to),
-        "Source %s and destination %s must be different", from, to);
+            "Source %s and destination %s must be different", from, to);
     asByteSource(from).copyTo(asByteSink(to));
   }
 
@@ -314,14 +300,14 @@ public final class VirtualFiles {
    * Writes a character sequence (such as a string) to a file using the given
    * character set.
    *
-   * @param from the character sequence to write
-   * @param to the destination file
+   * @param from    the character sequence to write
+   * @param to      the destination file
    * @param charset the charset used to encode the output stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @throws IOException if an I/O error occurs
    */
-  public static void write(CharSequence from, File to, Charset charset)
-      throws IOException {
+  public static void write(CharSequence from, String to, Charset charset)
+          throws IOException {
     asCharSink(to, charset).write(from);
   }
 
@@ -329,14 +315,14 @@ public final class VirtualFiles {
    * Appends a character sequence (such as a string) to a file using the given
    * character set.
    *
-   * @param from the character sequence to append
-   * @param to the destination file
+   * @param from    the character sequence to append
+   * @param to      the destination file
    * @param charset the charset used to encode the output stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @throws IOException if an I/O error occurs
    */
-  public static void append(CharSequence from, File to, Charset charset)
-      throws IOException {
+  public static void append(CharSequence from, String to, Charset charset)
+          throws IOException {
     write(from, to, charset, true);
   }
 
@@ -344,15 +330,15 @@ public final class VirtualFiles {
    * Private helper method. Writes a character sequence to a file,
    * optionally appending.
    *
-   * @param from the character sequence to append
-   * @param to the destination file
+   * @param from    the character sequence to append
+   * @param to      the destination file
    * @param charset the charset used to encode the output stream; see {@link
-   *     Charsets} for helpful predefined constants
-   * @param append true to append, false to overwrite
+   *                Charsets} for helpful predefined constants
+   * @param append  true to append, false to overwrite
    * @throws IOException if an I/O error occurs
    */
-  private static void write(CharSequence from, File to, Charset charset,
-      boolean append) throws IOException {
+  private static void write(CharSequence from, String to, Charset charset,
+                            boolean append) throws IOException {
     asCharSink(to, charset, modes(append)).write(from);
   }
 
@@ -360,14 +346,14 @@ public final class VirtualFiles {
    * Copies all characters from a file to an appendable object,
    * using the given character set.
    *
-   * @param from the source file
+   * @param from    the source file
    * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
-   * @param to the appendable object
+   *                Charsets} for helpful predefined constants
+   * @param to      the appendable object
    * @throws IOException if an I/O error occurs
    */
-  public static void copy(File from, Charset charset, Appendable to)
-      throws IOException {
+  public static void copy(String from, Charset charset, Appendable to)
+          throws IOException {
     asCharSource(from, charset).copyTo(to);
   }
 
@@ -376,10 +362,11 @@ public final class VirtualFiles {
    *
    * @throws IOException if an I/O error occurs
    */
-  public static boolean equal(File file1, File file2) throws IOException {
+  public static boolean equal(String file1, String file2) throws IOException {
     checkNotNull(file1);
     checkNotNull(file2);
-    if (file1 == file2 || file1.equals(file2)) {
+    final FileSystemManager vfs = VFS.getManager();
+    if (Objects.equals(file1, file2) || vfs.resolveFile(file1).equals(vfs.resolveFile(file2))) {
       return true;
     }
 
@@ -400,14 +387,14 @@ public final class VirtualFiles {
    * Atomically creates a new directory somewhere beneath the system's
    * temporary directory (as defined by the {@code java.io.tmpdir} system
    * property), and returns its name.
-   *
+   * <p>
    * <p>Use this method instead of {@link File#createTempFile(String, String)}
    * when you wish to create a directory, not a regular file.  A common pitfall
    * is to call {@code createTempFile}, delete the file and create a
    * directory in its place, but this leads a race condition which can be
    * exploited to create security vulnerabilities, especially when executable
    * files are to be written into the directory.
-   *
+   * <p>
    * <p>This method assumes that the temporary volume is writable, has free
    * inodes and free blocks, and that it will not be called thousands of times
    * per second.
@@ -416,18 +403,7 @@ public final class VirtualFiles {
    * @throws IllegalStateException if the directory could not be created
    */
   public static File createTempDir() {
-    File baseDir = new File(System.getProperty("java.io.tmpdir"));
-    String baseName = System.currentTimeMillis() + "-";
-
-    for (int counter = 0; counter < TEMP_DIR_ATTEMPTS; counter++) {
-      File tempDir = new File(baseDir, baseName + counter);
-      if (tempDir.mkdir()) {
-        return tempDir;
-      }
-    }
-    throw new IllegalStateException("Failed to create directory within "
-        + TEMP_DIR_ATTEMPTS + " attempts (tried "
-        + baseName + "0 to " + baseName + (TEMP_DIR_ATTEMPTS - 1) + ')');
+    return Files.createTempDir();
   }
 
   /**
@@ -437,12 +413,9 @@ public final class VirtualFiles {
    * @param file the file to create or update
    * @throws IOException if an I/O error occurs
    */
-  public static void touch(File file) throws IOException {
+  public static void touch(String file) throws IOException {
     checkNotNull(file);
-    if (!file.createNewFile()
-        && !file.setLastModified(System.currentTimeMillis())) {
-      throw new IOException("Unable to update modification time of " + file);
-    }
+    resolveFile(file).createFile();
   }
 
   /**
@@ -451,25 +424,14 @@ public final class VirtualFiles {
    * some (but not all) of the necessary parent directories.
    *
    * @throws IOException if an I/O error occurs, or if any necessary but
-   *     nonexistent parent directories of the specified file could not be
-   *     created.
+   *                     nonexistent parent directories of the specified file could not be
+   *                     created.
    * @since 4.0
    */
-  public static void createParentDirs(File file) throws IOException {
+  public static void createParentDirs(String file) throws IOException {
     checkNotNull(file);
-    File parent = file.getCanonicalFile().getParentFile();
-    if (parent == null) {
-      /*
-       * The given directory is a filesystem root. All zero of its ancestors
-       * exist. This doesn't mean that the root itself exists -- consider x:\ on
-       * a Windows machine without such a drive -- or even that the caller can
-       * create it, but this method makes no such guarantees even for non-root
-       * files.
-       */
-      return;
-    }
-    parent.mkdirs();
-    if (!parent.isDirectory()) {
+    resolveFile(file).getParent().createFolder();
+    if (!resolveFile(file).getParent().isFolder()) {
       throw new IOException("Unable to create parent directories of " + file);
     }
   }
@@ -481,25 +443,16 @@ public final class VirtualFiles {
    * file or the path to the new parent directory.
    *
    * @param from the source file
-   * @param to the destination file
-   * @throws IOException if an I/O error occurs
+   * @param to   the destination file
+   * @throws IOException              if an I/O error occurs
    * @throws IllegalArgumentException if {@code from.equals(to)}
    */
-  public static void move(File from, File to) throws IOException {
+  public static void move(String from, String to) throws IOException {
     checkNotNull(from);
     checkNotNull(to);
     checkArgument(!from.equals(to),
-        "Source %s and destination %s must be different", from, to);
-
-    if (!from.renameTo(to)) {
-      copy(from, to);
-      if (!from.delete()) {
-        if (!to.delete()) {
-          throw new IOException("Unable to delete " + to);
-        }
-        throw new IOException("Unable to delete " + from);
-      }
-    }
+            "Source %s and destination %s must be different", from, to);
+    resolveFile(from).moveTo(resolveFile(to));
   }
 
   /**
@@ -507,14 +460,14 @@ public final class VirtualFiles {
    * line-termination characters, but does include other leading and
    * trailing whitespace.
    *
-   * @param file the file to read from
+   * @param file    the file to read from
    * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @return the first line, or null if the file is empty
    * @throws IOException if an I/O error occurs
    */
-  public static String readFirstLine(File file, Charset charset)
-      throws IOException {
+  public static String readFirstLine(String file, Charset charset)
+          throws IOException {
     return asCharSource(file, charset).readFirstLine();
   }
 
@@ -522,19 +475,19 @@ public final class VirtualFiles {
    * Reads all of the lines from a file. The lines do not include
    * line-termination characters, but do include other leading and
    * trailing whitespace.
-   *
+   * <p>
    * <p>This method returns a mutable {@code List}. For an
    * {@code ImmutableList}, use
    * {@code Files.asCharSource(file, charset).readLines()}.
    *
-   * @param file the file to read from
+   * @param file    the file to read from
    * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
+   *                Charsets} for helpful predefined constants
    * @return a mutable {@link List} containing all the lines
    * @throws IOException if an I/O error occurs
    */
-  public static List<String> readLines(File file, Charset charset)
-      throws IOException {
+  public static List<String> readLines(String file, Charset charset)
+          throws IOException {
     // don't use asCharSource(file, charset).readLines() because that returns
     // an immutable list, which would change the behavior of this method
     return readLines(file, charset, new LineProcessor<List<String>>() {
@@ -557,65 +510,64 @@ public final class VirtualFiles {
    * Streams lines from a {@link File}, stopping when our callback returns
    * false, or we have read all of the lines.
    *
-   * @param file the file to read from
-   * @param charset the charset used to decode the input stream; see {@link
-   *     Charsets} for helpful predefined constants
+   * @param file     the file to read from
+   * @param charset  the charset used to decode the input stream; see {@link
+   *                 Charsets} for helpful predefined constants
    * @param callback the {@link LineProcessor} to use to handle the lines
    * @return the output of processing the lines
    * @throws IOException if an I/O error occurs
    */
-  public static <T> T readLines(File file, Charset charset,
-      LineProcessor<T> callback) throws IOException {
+  public static <T> T readLines(String file, Charset charset,
+                                LineProcessor<T> callback) throws IOException {
     return asCharSource(file, charset).readLines(callback);
   }
 
   /**
    * Process the bytes of a file.
-   *
+   * <p>
    * <p>(If this seems too complicated, maybe you're looking for
    * {@link #toByteArray}.)
    *
-   * @param file the file to read
+   * @param file      the file to read
    * @param processor the object to which the bytes of the file are passed.
    * @return the result of the byte processor
    * @throws IOException if an I/O error occurs
    */
-  public static <T> T readBytes(File file, ByteProcessor<T> processor)
-      throws IOException {
+  public static <T> T readBytes(String file, ByteProcessor<T> processor)
+          throws IOException {
     return asByteSource(file).read(processor);
   }
 
   /**
    * Computes the hash code of the {@code file} using {@code hashFunction}.
    *
-   * @param file the file to read
+   * @param file         the file to read
    * @param hashFunction the hash function to use to hash the data
    * @return the {@link HashCode} of all of the bytes in the file
    * @throws IOException if an I/O error occurs
    * @since 12.0
    */
-  public static HashCode hash(File file, HashFunction hashFunction)
-      throws IOException {
+  public static HashCode hash(String file, HashFunction hashFunction)
+          throws IOException {
     return asByteSource(file).hash(hashFunction);
   }
 
   /**
    * Fully maps a file read-only in to memory as per
    * {@link FileChannel#map(java.nio.channels.FileChannel.MapMode, long, long)}.
-   *
+   * <p>
    * <p>Files are mapped from offset 0 to its length.
-   *
+   * <p>
    * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @return a read-only buffer reflecting {@code file}
    * @throws FileNotFoundException if the {@code file} does not exist
-   * @throws IOException if an I/O error occurs
-   *
+   * @throws IOException           if an I/O error occurs
    * @see FileChannel#map(MapMode, long, long)
    * @since 2.0
    */
-  public static MappedByteBuffer map(File file) throws IOException {
+  public static MappedByteBuffer map(String file) throws IOException {
     checkNotNull(file);
     return map(file, MapMode.READ_ONLY);
   }
@@ -624,60 +576,66 @@ public final class VirtualFiles {
    * Fully maps a file in to memory as per
    * {@link FileChannel#map(java.nio.channels.FileChannel.MapMode, long, long)}
    * using the requested {@link MapMode}.
-   *
+   * <p>
    * <p>Files are mapped from offset 0 to its length.
-   *
+   * <p>
    * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @param mode the mode to use when mapping {@code file}
    * @return a buffer reflecting {@code file}
    * @throws FileNotFoundException if the {@code file} does not exist
-   * @throws IOException if an I/O error occurs
-   *
+   * @throws IOException           if an I/O error occurs
    * @see FileChannel#map(MapMode, long, long)
    * @since 2.0
    */
-  public static MappedByteBuffer map(File file, MapMode mode)
-      throws IOException {
+  public static MappedByteBuffer map(String file, MapMode mode)
+          throws IOException {
     checkNotNull(file);
     checkNotNull(mode);
-    if (!file.exists()) {
+    if (!exists(file)) {
       throw new FileNotFoundException(file.toString());
     }
     return map(file, mode, file.length());
+  }
+
+  public static boolean exists(String file) throws IOException {
+    return resolveFile(file).exists();
+  }
+
+  public static boolean delete(String file) throws IOException {
+    return resolveFile(file).delete();
   }
 
   /**
    * Maps a file in to memory as per
    * {@link FileChannel#map(java.nio.channels.FileChannel.MapMode, long, long)}
    * using the requested {@link MapMode}.
-   *
+   * <p>
    * <p>Files are mapped from offset 0 to {@code size}.
-   *
+   * <p>
    * <p>If the mode is {@link MapMode#READ_WRITE} and the file does not exist,
    * it will be created with the requested {@code size}. Thus this method is
    * useful for creating memory mapped files which do not yet exist.
-   *
+   * <p>
    * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @param mode the mode to use when mapping {@code file}
    * @return a buffer reflecting {@code file}
    * @throws IOException if an I/O error occurs
-   *
    * @see FileChannel#map(MapMode, long, long)
    * @since 2.0
    */
-  public static MappedByteBuffer map(File file, MapMode mode, long size)
-      throws FileNotFoundException, IOException {
+  public static MappedByteBuffer map(String file, MapMode mode, long size)
+          throws FileNotFoundException, IOException {
     checkNotNull(file);
     checkNotNull(mode);
 
     Closer closer = Closer.create();
     try {
       RandomAccessFile raf = closer.register(
-          new RandomAccessFile(file, mode == MapMode.READ_ONLY ? "r" : "rw"));
+              new RandomAccessFile(file, mode == MapMode.READ_ONLY ? "r" : "rw"));
       return map(raf, mode, size);
     } catch (Throwable e) {
       throw closer.rethrow(e);
@@ -687,7 +645,7 @@ public final class VirtualFiles {
   }
 
   private static MappedByteBuffer map(RandomAccessFile raf, MapMode mode,
-      long size) throws IOException {
+                                      long size) throws IOException {
     Closer closer = Closer.create();
     try {
       FileChannel channel = closer.register(raf.getChannel());
@@ -702,7 +660,7 @@ public final class VirtualFiles {
   /**
    * Returns the lexically cleaned form of the path name, <i>usually</i> (but
    * not always) equivalent to the original. The following heuristics are used:
-   *
+   * <p>
    * <ul>
    * <li>empty string becomes .
    * <li>. stays as .
@@ -711,7 +669,7 @@ public final class VirtualFiles {
    * <li>collapse multiple slashes
    * <li>delete trailing slashes (unless the path is just "/")
    * </ul>
-   *
+   * <p>
    * <p>These heuristics do not always match the behavior of the filesystem. In
    * particular, consider the path {@code a/../b}, which {@code simplifyPath}
    * will change to {@code b}. If {@code a} is a symlink to {@code x}, {@code
@@ -728,7 +686,7 @@ public final class VirtualFiles {
 
     // split the path apart
     Iterable<String> components =
-        Splitter.on('/').omitEmptyStrings().split(pathname);
+            Splitter.on('/').omitEmptyStrings().split(pathname);
     List<String> path = new ArrayList<String>();
 
     // resolve ., .., and //
@@ -784,7 +742,7 @@ public final class VirtualFiles {
    * similar to the {@code basename} unix command. The result does not include the '{@code .}'.
    *
    * @param file The name of the file to trim the extension from. This can be either a fully
-   *     qualified file name (including a path) or just a file name.
+   *             qualified file name (including a path) or just a file name.
    * @return The file name without its path or extension.
    * @since 14.0
    */
@@ -797,7 +755,7 @@ public final class VirtualFiles {
 
   /**
    * Returns a {@link TreeTraverser} instance for {@link File} trees.
-   *
+   * <p>
    * <p><b>Warning:</b> {@code File} provides no support for symbolic links, and as such there is no
    * way to ensure that a symbolic link to a directory is not followed when traversing the tree.
    * In this case, iterables created by this traverser could contain files that are outside of the
@@ -806,28 +764,8 @@ public final class VirtualFiles {
    * @since 15.0
    */
   public static TreeTraverser<File> fileTreeTraverser() {
-    return FILE_TREE_TRAVERSER;
+    return Files.fileTreeTraverser();
   }
-
-  private static final TreeTraverser<File> FILE_TREE_TRAVERSER = new TreeTraverser<File>() {
-    @Override
-    public Iterable<File> children(File file) {
-      // check isDirectory() just because it may be faster than listFiles() on a non-directory
-      if (file.isDirectory()) {
-        File[] files = file.listFiles();
-        if (files != null) {
-          return Collections.unmodifiableList(Arrays.asList(files));
-        }
-      }
-
-      return Collections.emptyList();
-    }
-
-    @Override
-    public String toString() {
-      return "Files.fileTreeTraverser()";
-    }
-  };
 
   /**
    * Returns a predicate that returns the result of {@link File#isDirectory} on input files.
@@ -835,7 +773,7 @@ public final class VirtualFiles {
    * @since 15.0
    */
   public static Predicate<File> isDirectory() {
-    return FilePredicate.IS_DIRECTORY;
+    return Files.isDirectory();
   }
 
   /**
@@ -844,32 +782,6 @@ public final class VirtualFiles {
    * @since 15.0
    */
   public static Predicate<File> isFile() {
-    return FilePredicate.IS_FILE;
-  }
-
-  private enum FilePredicate implements Predicate<File> {
-    IS_DIRECTORY {
-      @Override
-      public boolean apply(File file) {
-        return file.isDirectory();
-      }
-
-      @Override
-      public String toString() {
-        return "Files.isDirectory()";
-      }
-    },
-
-    IS_FILE {
-      @Override
-      public boolean apply(File file) {
-        return file.isFile();
-      }
-
-      @Override
-      public String toString() {
-        return "Files.isFile()";
-      }
-    };
+    return Files.isFile();
   }
 }
