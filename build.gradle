@@ -1,0 +1,12 @@
+apply plugin: 'java'
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    compile 'com.google.guava:guava:16+'
+    compile 'org.apache.commons:commons-vfs2:2+'
+    compile 'org.slf4j:jcl-over-slf4j:1+'
+    testCompile 'junit:junit:4.12'
+}
