@@ -9,4 +9,5 @@ dependencies {
     compile 'org.apache.commons:commons-vfs2:2+'
     compile 'org.slf4j:jcl-over-slf4j:1+'
     testCompile 'junit:junit:4.12'
+    testCompile 'com.google.truth:truth:0.27'
 }

@@ -375,8 +375,8 @@ public final class VirtualFiles {
      * denoting system-dependent entities such as devices or pipes, in
      * which case we must fall back on comparing the bytes directly.
      */
-    long len1 = file1.length();
-    long len2 = file2.length();
+    long len1 = length(file1);
+    long len2 = length(file2);
     if (len1 != 0 && len2 != 0 && len1 != len2) {
       return false;
     }
@@ -594,9 +594,9 @@ public final class VirtualFiles {
     checkNotNull(file);
     checkNotNull(mode);
     if (!exists(file)) {
-      throw new FileNotFoundException(file.toString());
+      throw new FileNotFoundException(file);
     }
-    return map(file, mode, file.length());
+    return map(file, mode, length(file));
   }
 
   public static boolean exists(String file) throws IOException {
@@ -605,6 +605,18 @@ public final class VirtualFiles {
 
   public static boolean delete(String file) throws IOException {
     return resolveFile(file).delete();
+  }
+
+  public static long length(String file) throws IOException {
+    return resolveFile(file).getContent().getSize();
+  }
+
+  public static long getLastModified(String file) throws IOException {
+    return resolveFile(file).getContent().getLastModifiedTime();
+  }
+
+  public static void setLastModified(String file, long modTime) throws IOException {
+    resolveFile(file).getContent().setLastModifiedTime(modTime);
   }
 
   /**
