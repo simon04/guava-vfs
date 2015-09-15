@@ -599,22 +599,49 @@ public final class VirtualFiles {
     return map(file, mode, length(file));
   }
 
+  /**
+   * Determines if this file exists.
+   * @param file the file to test
+   * @throws IOException if an I/O error occurs
+   */
   public static boolean exists(String file) throws IOException {
     return resolveFile(file).exists();
   }
 
+  /**
+   * Deletes this file. Does nothing if this file does not exist of if it is a folder that has children.
+   * @param file the file to delete
+   * @return true if this object has been deleted
+   * @throws IOException if an I/O error occurs
+   */
   public static boolean delete(String file) throws IOException {
     return resolveFile(file).delete();
   }
 
+  /**
+   * Determines the size of the file, in bytes.
+   * @param file the file to analyze
+   * @throws IOException if an I/O error occurs
+   */
   public static long length(String file) throws IOException {
     return resolveFile(file).getContent().getSize();
   }
 
+  /**
+   * Determines the last-modified timestamp of the file.
+   * @param file the file to analyze
+   * @throws IOException if an I/O error occurs
+   */
   public static long getLastModified(String file) throws IOException {
     return resolveFile(file).getContent().getLastModifiedTime();
   }
 
+  /**
+   * Sets the last-modified timestamp of the file. Creates the file if it does not exist.
+   * @param file the file to modify
+   * @param modTime the time to set the last-modified timestamp to
+   * @throws IOException if an I/O error occurs
+   */
   public static void setLastModified(String file, long modTime) throws IOException {
     resolveFile(file).getContent().setLastModifiedTime(modTime);
   }
