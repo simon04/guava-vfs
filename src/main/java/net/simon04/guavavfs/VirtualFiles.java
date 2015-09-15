@@ -21,9 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.io.FileWriteMode.APPEND;
 
 import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.TreeTraverser;
@@ -63,7 +61,6 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -125,7 +122,6 @@ public final class VirtualFiles {
   /**
    * Returns a new {@link ByteSource} for reading bytes from the given file.
    *
-   * @since 14.0
    */
   public static ByteSource asByteSource(String file) {
     return new VirtualFileByteSource(file);
@@ -174,7 +170,6 @@ public final class VirtualFiles {
    * {@link FileWriteMode#APPEND APPEND} mode is provided, writes will
    * append to the end of the file without truncating it.
    *
-   * @since 14.0
    */
   public static ByteSink asByteSink(String file, FileWriteMode... modes) {
     return new VirtualFileByteSink(file, modes);
@@ -201,7 +196,6 @@ public final class VirtualFiles {
    * Returns a new {@link CharSource} for reading character data from the given
    * file using the given character set.
    *
-   * @since 14.0
    */
   public static CharSource asCharSource(String file, Charset charset) {
     return asByteSource(file).asCharSource(charset);
@@ -215,7 +209,6 @@ public final class VirtualFiles {
    * {@link FileWriteMode#APPEND APPEND} mode is provided, writes will
    * append to the end of the file without truncating it.
    *
-   * @since 14.0
    */
   public static CharSink asCharSink(String file, Charset charset,
                                     FileWriteMode... modes) {
@@ -426,7 +419,6 @@ public final class VirtualFiles {
    * @throws IOException if an I/O error occurs, or if any necessary but
    *                     nonexistent parent directories of the specified file could not be
    *                     created.
-   * @since 4.0
    */
   public static void createParentDirs(String file) throws IOException {
     checkNotNull(file);
@@ -545,7 +537,6 @@ public final class VirtualFiles {
    * @param hashFunction the hash function to use to hash the data
    * @return the {@link HashCode} of all of the bytes in the file
    * @throws IOException if an I/O error occurs
-   * @since 12.0
    */
   public static HashCode hash(String file, HashFunction hashFunction)
           throws IOException {
@@ -565,7 +556,6 @@ public final class VirtualFiles {
    * @throws FileNotFoundException if the {@code file} does not exist
    * @throws IOException           if an I/O error occurs
    * @see FileChannel#map(MapMode, long, long)
-   * @since 2.0
    */
   public static MappedByteBuffer map(String file) throws IOException {
     checkNotNull(file);
@@ -587,7 +577,6 @@ public final class VirtualFiles {
    * @throws FileNotFoundException if the {@code file} does not exist
    * @throws IOException           if an I/O error occurs
    * @see FileChannel#map(MapMode, long, long)
-   * @since 2.0
    */
   public static MappedByteBuffer map(String file, MapMode mode)
           throws IOException {
@@ -664,7 +653,6 @@ public final class VirtualFiles {
    * @return a buffer reflecting {@code file}
    * @throws IOException if an I/O error occurs
    * @see FileChannel#map(MapMode, long, long)
-   * @since 2.0
    */
   public static MappedByteBuffer map(String file, MapMode mode, long size)
           throws FileNotFoundException, IOException {
@@ -715,50 +703,9 @@ public final class VirtualFiles {
    * a/../b} may refer to a sibling of {@code x}, rather than the sibling of
    * {@code a} referred to by {@code b}.
    *
-   * @since 11.0
    */
   public static String simplifyPath(String pathname) {
-    checkNotNull(pathname);
-    if (pathname.length() == 0) {
-      return ".";
-    }
-
-    // split the path apart
-    Iterable<String> components =
-            Splitter.on('/').omitEmptyStrings().split(pathname);
-    List<String> path = new ArrayList<String>();
-
-    // resolve ., .., and //
-    for (String component : components) {
-      if (component.equals(".")) {
-        continue;
-      } else if (component.equals("..")) {
-        if (path.size() > 0 && !path.get(path.size() - 1).equals("..")) {
-          path.remove(path.size() - 1);
-        } else {
-          path.add("..");
-        }
-      } else {
-        path.add(component);
-      }
-    }
-
-    // put it back together
-    String result = Joiner.on('/').join(path);
-    if (pathname.charAt(0) == '/') {
-      result = "/" + result;
-    }
-
-    while (result.startsWith("/../")) {
-      result = result.substring(3);
-    }
-    if (result.equals("/..")) {
-      result = "/";
-    } else if ("".equals(result)) {
-      result = ".";
-    }
-
-    return result;
+    return Files.simplifyPath(pathname);
   }
 
   /**
@@ -766,7 +713,6 @@ public final class VirtualFiles {
    * extension</a> for the given file name, or the empty string if the file has
    * no extension.  The result does not include the '{@code .}'.
    *
-   * @since 11.0
    */
   public static String getFileExtension(String fullName) {
     checkNotNull(fullName);
@@ -783,7 +729,6 @@ public final class VirtualFiles {
    * @param file The name of the file to trim the extension from. This can be either a fully
    *             qualified file name (including a path) or just a file name.
    * @return The file name without its path or extension.
-   * @since 14.0
    */
   public static String getNameWithoutExtension(String file) {
     checkNotNull(file);
@@ -800,7 +745,6 @@ public final class VirtualFiles {
    * In this case, iterables created by this traverser could contain files that are outside of the
    * given directory or even be infinite if there is a symbolic link loop.
    *
-   * @since 15.0
    */
   public static TreeTraverser<File> fileTreeTraverser() {
     return Files.fileTreeTraverser();
@@ -809,7 +753,6 @@ public final class VirtualFiles {
   /**
    * Returns a predicate that returns the result of {@link File#isDirectory} on input files.
    *
-   * @since 15.0
    */
   public static Predicate<File> isDirectory() {
     return Files.isDirectory();
@@ -818,7 +761,6 @@ public final class VirtualFiles {
   /**
    * Returns a predicate that returns the result of {@link File#isFile} on input files.
    *
-   * @since 15.0
    */
   public static Predicate<File> isFile() {
     return Files.isFile();
