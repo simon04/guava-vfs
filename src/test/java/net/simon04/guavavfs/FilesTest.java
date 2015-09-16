@@ -717,4 +717,8 @@ public class FilesTest extends IoTestCase {
     }
     return file;
   }
+
+  public void testRelativeFile() throws Exception {
+    assertFalse(VirtualFiles.exists("a/relative/file"));
+  }
 }

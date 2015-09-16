@@ -37,20 +37,20 @@ import com.google.common.io.Closer;
 import com.google.common.io.FileWriteMode;
 import com.google.common.io.Files;
 import com.google.common.io.LineProcessor;
+import org.apache.commons.logging.LogFactory;
 import org.apache.commons.vfs2.FileContent;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.FileSystemOptions;
 import org.apache.commons.vfs2.VFS;
+import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
 import org.apache.commons.vfs2.provider.sftp.SftpFileSystemConfigBuilder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -79,6 +79,13 @@ public final class VirtualFiles {
   static final FileSystemOptions FILE_SYSTEM_OPTIONS = new FileSystemOptions();
   static {
     SftpFileSystemConfigBuilder.getInstance().setUserDirIsRoot(FILE_SYSTEM_OPTIONS, false);
+    try {
+      if (VFS.getManager() instanceof DefaultFileSystemManager) {
+        ((DefaultFileSystemManager) VFS.getManager()).setBaseFile(new File("").getAbsoluteFile());
+      }
+    } catch (FileSystemException ex) {
+      LogFactory.getLog(VirtualFiles.class).warn("Failed to set base file");
+    }
   }
 
   static FileObject resolveFile(String file) throws FileSystemException {
