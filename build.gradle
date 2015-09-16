@@ -26,7 +26,6 @@ dependencies {
 }
 
 javadoc {
-    failOnError = false
     options {
         links 'http://docs.oracle.com/javase/7/docs/api/'
         links 'http://docs.guava-libraries.googlecode.com/git/javadoc/'

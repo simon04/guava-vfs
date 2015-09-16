@@ -558,7 +558,7 @@ public final class VirtualFiles {
    * <p>
    * <p>Files are mapped from offset 0 to its length.
    * <p>
-   * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
+   * <p>This only works for files {@code <=} {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @return a read-only buffer reflecting {@code file}
@@ -578,7 +578,7 @@ public final class VirtualFiles {
    * <p>
    * <p>Files are mapped from offset 0 to its length.
    * <p>
-   * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
+   * <p>This only works for files {@code <=} {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @param mode the mode to use when mapping {@code file}
@@ -655,7 +655,7 @@ public final class VirtualFiles {
    * it will be created with the requested {@code size}. Thus this method is
    * useful for creating memory mapped files which do not yet exist.
    * <p>
-   * <p>This only works for files <= {@link Integer#MAX_VALUE} bytes.
+   * <p>This only works for files {@code <=} {@link Integer#MAX_VALUE} bytes.
    *
    * @param file the file to map
    * @param mode the mode to use when mapping {@code file}
