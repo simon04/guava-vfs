@@ -15,7 +15,7 @@ repositories {
 }
 
 dependencies {
-  compile(group: 'net.simon04', name: 'guava-vfs', version: '1.0.0', ext: 'jar')
+  compile(group: 'net.simon04', name: 'guava-vfs', version: '1.0.1', ext: 'jar')
 }
 ```
 
