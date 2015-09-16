@@ -9,7 +9,9 @@ This project is being published to [bintray.com/simon04/maven/guava-vfs](https:/
 
 ```gradle
 repositories {
-  jcenter()
+  maven {
+    url 'https://dl.bintray.com/simon04/maven/'
+  }
 }
 
 dependencies {
