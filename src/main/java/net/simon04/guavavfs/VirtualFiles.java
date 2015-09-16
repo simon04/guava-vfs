@@ -102,11 +102,12 @@ public final class VirtualFiles {
    * @return the buffered reader
    */
   public static BufferedReader newReader(String file, Charset charset)
-          throws FileNotFoundException {
+          throws IOException {
     checkNotNull(file);
     checkNotNull(charset);
+    final InputStream in = resolveFile(file).getContent().getInputStream();
     return new BufferedReader(
-            new InputStreamReader(new FileInputStream(file), charset));
+            new InputStreamReader(in, charset));
   }
 
   /**
@@ -119,11 +120,12 @@ public final class VirtualFiles {
    * @return the buffered writer
    */
   public static BufferedWriter newWriter(String file, Charset charset)
-          throws FileNotFoundException {
+          throws IOException {
     checkNotNull(file);
     checkNotNull(charset);
+    final OutputStream out = resolveFile(file).getContent().getOutputStream();
     return new BufferedWriter(
-            new OutputStreamWriter(new FileOutputStream(file), charset));
+            new OutputStreamWriter(out, charset));
   }
 
   /**
