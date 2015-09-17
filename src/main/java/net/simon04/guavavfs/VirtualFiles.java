@@ -43,6 +43,7 @@ import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.FileSystemOptions;
+import org.apache.commons.vfs2.FileType;
 import org.apache.commons.vfs2.VFS;
 import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
 import org.apache.commons.vfs2.provider.sftp.SftpFileSystemConfigBuilder;
@@ -432,7 +433,7 @@ public final class VirtualFiles {
   public static void createParentDirs(String file) throws IOException {
     checkNotNull(file);
     resolveFile(file).getParent().createFolder();
-    if (!resolveFile(file).getParent().isFolder()) {
+    if (resolveFile(file).getParent().getType() != FileType.FOLDER) {
       throw new IOException("Unable to create parent directories of " + file);
     }
   }
