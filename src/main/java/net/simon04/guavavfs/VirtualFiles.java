@@ -47,7 +47,6 @@ import org.apache.commons.vfs2.FileSystemOptions;
 import org.apache.commons.vfs2.FileType;
 import org.apache.commons.vfs2.VFS;
 import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
-import org.apache.commons.vfs2.provider.sftp.SftpFileSystemConfigBuilder;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -80,7 +79,6 @@ public final class VirtualFiles {
 
   static final FileSystemOptions FILE_SYSTEM_OPTIONS = new FileSystemOptions();
   static {
-    SftpFileSystemConfigBuilder.getInstance().setUserDirIsRoot(FILE_SYSTEM_OPTIONS, false);
     try {
       if (VFS.getManager() instanceof DefaultFileSystemManager) {
         ((DefaultFileSystemManager) VFS.getManager()).setBaseFile(new File("").getAbsoluteFile());
