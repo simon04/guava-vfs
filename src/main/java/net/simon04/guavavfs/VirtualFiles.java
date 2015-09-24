@@ -40,6 +40,7 @@ import com.google.common.io.LineProcessor;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.vfs2.FileContent;
 import org.apache.commons.vfs2.FileObject;
+import org.apache.commons.vfs2.FileSystemConfigBuilder;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.FileSystemOptions;
@@ -87,6 +88,16 @@ public final class VirtualFiles {
     } catch (FileSystemException ex) {
       LogFactory.getLog(VirtualFiles.class).warn("Failed to set base file");
     }
+  }
+
+  /**
+   * Returns the {@link FileSystemOptions} object used for all operations
+   * (especially {@link FileSystemManager#resolveFile(java.lang.String, org.apache.commons.vfs2.FileSystemOptions)}).
+   *
+   * This allows to customize the options using methods of {@link FileSystemConfigBuilder} subclasses.
+   */
+  public static FileSystemOptions getFileSystemOptions() {
+    return FILE_SYSTEM_OPTIONS;
   }
 
   static FileObject resolveFile(String file) throws FileSystemException {
